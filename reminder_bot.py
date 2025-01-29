@@ -38,7 +38,7 @@ months_ru = {
 def add_test_reminders(chat_id):
     # Тестовые напоминания
     test_reminders = [
-        (datetime.now() + timedelta(minutes=1), "Тестовое напоминание 1"),
+        (datetime.now() + timedelta(minutes=0.10), "Тестовое напоминание 1"),
         (datetime.now() + timedelta(minutes=2), "Тестовое напоминание 2"),
         (datetime.now() + timedelta(minutes=3), "Тестовое напоминание 3"),
         (datetime.now() + timedelta(minutes=4), "Тестовое напоминание 4")
@@ -48,6 +48,11 @@ def add_test_reminders(chat_id):
         reminders[chat_id] = []
     reminders[chat_id].extend(test_reminders)
     logging.info(f"Добавлены тестовые напоминания для пользователя {chat_id}")
+
+    # Запуск таймеров для тестовых напоминаний
+    for reminder_time, reminder_message in test_reminders:
+        sleep_time = (reminder_time - datetime.now()).total_seconds()
+        asyncio.create_task(send_reminder(chat_id, reminder_message, sleep_time))
 
 
 @dp.message(Command(commands=['start']))
@@ -193,11 +198,16 @@ async def handle_message(message: Message):
 
         # Запустите таймер для напоминания
         sleep_time = (reminder_time - current_time).total_seconds()
-        await asyncio.sleep(sleep_time)
-        await bot.send_message(chat_id=chat_id, text=f"Напоминание: {reminder_message}")
-
+        asyncio.create_task(send_reminder(chat_id, reminder_message, sleep_time))
         # Очистите временные данные
         del temp_data[chat_id]
+
+
+async def send_reminder(chat_id, reminder_message, sleep_time):
+    logging.info(f"Запуск таймера для напоминания: {reminder_message} через {sleep_time} секунд")
+    await asyncio.sleep(sleep_time)
+    logging.info(f"Отправка напоминания: {reminder_message} для пользователя {chat_id}")
+    await bot.send_message(chat_id=chat_id, text=f"Напоминание: {reminder_message}")
 
 
 async def main():
