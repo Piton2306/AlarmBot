@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -33,6 +33,21 @@ months_ru = {
     1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель", 5: "Май", 6: "Июнь",
     7: "Июль", 8: "Август", 9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
 }
+
+
+def add_test_reminders(chat_id):
+    # Тестовые напоминания
+    test_reminders = [
+        (datetime.now() + timedelta(minutes=1), "Тестовое напоминание 1"),
+        (datetime.now() + timedelta(minutes=2), "Тестовое напоминание 2"),
+        (datetime.now() + timedelta(minutes=3), "Тестовое напоминание 3"),
+        (datetime.now() + timedelta(minutes=4), "Тестовое напоминание 4")
+    ]
+
+    if chat_id not in reminders:
+        reminders[chat_id] = []
+    reminders[chat_id].extend(test_reminders)
+    logging.info(f"Добавлены тестовые напоминания для пользователя {chat_id}")
 
 
 @dp.message(Command(commands=['start']))
@@ -72,21 +87,23 @@ async def set_reminder(message: Message):
 async def list_reminders(message: Message):
     chat_id = message.chat.id
     logging.info(f"Пользователь {chat_id} запросил список напоминаний.")
-    if chat_id in reminders:
-        current_time = datetime.now()
-        reminders_list = reminders[chat_id]
-        response = "Список напоминаний:\n"
-        for reminder_time, reminder_message in reminders_list:
-            remaining_time = (reminder_time - current_time).total_seconds()
-            if remaining_time > 0:
-                remaining_time_str = str(int(remaining_time // 3600)) + " часов " + str(
-                    int((remaining_time % 3600) // 60)) + " минут"
-                response += f"Напоминание: {reminder_message}\nОсталось: {remaining_time_str}\n"
-            else:
-                response += f"Напоминание: {reminder_message}\nОсталось: Напоминание уже прошло\n"
-        await message.reply(response)
-    else:
-        await message.reply("У вас нет установленных напоминаний.")
+    if chat_id not in reminders:
+        add_test_reminders(chat_id)  # Добавляем тестовые напоминания, если их нет
+
+    current_time = datetime.now()
+    reminders_list = reminders[chat_id]
+    response = "Список напоминаний:\n\n"
+    for reminder_time, reminder_message in reminders_list:
+        remaining_time = (reminder_time - current_time).total_seconds()
+        if remaining_time > 0:
+            hours = int(remaining_time // 3600)
+            minutes = int((remaining_time % 3600) // 60)
+            seconds = int(remaining_time % 60)
+            remaining_time_str = f"{hours} часов {minutes} минут {seconds} секунд"
+            response += f"Напоминание: {reminder_message}\nОсталось: {remaining_time_str}\n\n"
+        else:
+            response += f"Напоминание: {reminder_message}\nОсталось: Напоминание уже прошло\n\n"
+    await message.reply(response)
 
 
 @dp.callback_query(lambda c: c.data.startswith('day_'))
