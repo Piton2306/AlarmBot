@@ -77,7 +77,7 @@ if __name__ == "__main__":
     output_file = "directory_structure.txt"  # Файл, в который будет записано содержимое
     exclude_dirs = [".venv", ".git", ".idea", "__pycache__", "file", "venv"]  # Папки, которые нужно исключить
     exclude_files = ["env",".tmp", ".gitignore", "database_parser_dollars.db", "directory_structure.txt", "tess.py",
-                     "requirements.txt", ".log", "print_directory_structure.py",
+                     "requirements.txt", ".log", "print_directory_structure.py","reminders.db",
                      "init.py"]  # Файлы, которые нужно исключить
     include_files = []  # Файлы, которые нужно включить, даже если они находятся в исключенных папках
     print_directory_structure(start_path, output_file, exclude_dirs=exclude_dirs, exclude_files=exclude_files,

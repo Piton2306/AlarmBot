@@ -99,6 +99,16 @@ async def send_welcome(message: Message):
     )
     await message.reply(welcome_message)
 
+async def send_command_list(message: Message):
+    command_list = (
+        "Список доступных команд:\n"
+        "/set - установить напоминание\n"
+        "/list - показать список напоминаний и оставшееся до них время\n"
+        "/delete - удалить напоминание\n"
+        "/start - показать это сообщение снова"
+    )
+    await message.reply(command_list)
+
 @dp.message(Command(commands=['set']))
 async def set_reminder(message: Message):
     chat_id = message.chat.id
@@ -170,16 +180,17 @@ async def list_reminders(message: Message):
     for index, (reminder_time_str, reminder_message, is_sent) in enumerate(reminders_list):
         reminder_time = datetime.fromisoformat(reminder_time_str)
         remaining_time = (reminder_time - current_time).total_seconds()
+        status = "Отправлено" if is_sent else "Не отправлено"
         if remaining_time > 0:
             hours = int(remaining_time // 3600)
             minutes = int((remaining_time % 3600) // 60)
             seconds = int(remaining_time % 60)
             remaining_time_str = f"{hours} часов {minutes} минут {seconds} секунд"
-            status = "Отправлено" if is_sent else "Не отправлено"
             response += f"{index + 1}. Напоминание: {reminder_message}\nОсталось: {remaining_time_str}\nСтатус: {status}\n\n"
         else:
             response += f"{index + 1}. Напоминание: {reminder_message}\nОсталось: Напоминание уже прошло\nСтатус: {status}\n\n"
     await message.reply(response)
+    await send_command_list(message)
 
 @dp.message(Command(commands=['delete']))
 async def delete_reminder(message: Message):
@@ -191,6 +202,7 @@ async def delete_reminder(message: Message):
 
     if not reminders_list:
         await message.reply("У вас нет напоминаний для удаления.")
+        await send_command_list(message)
         return
 
     current_time = datetime.now()
@@ -236,6 +248,7 @@ async def handle_message(message: Message):
             await message.reply("Пожалуйста, введите корректный номер напоминания.")
         finally:
             del temp_data[chat_id]
+        await send_command_list(message)
     elif chat_id in temp_data and 'date' in temp_data[chat_id] and 'time' in temp_data[chat_id]:
         date_str = temp_data[chat_id]['date']
         time_str = temp_data[chat_id]['time']
@@ -266,6 +279,7 @@ async def handle_message(message: Message):
 
         # Очистите временные данные
         del temp_data[chat_id]
+        await send_command_list(message)
 
 async def send_reminder(chat_id, reminder_message, sleep_time):
     logging.info(f"Запуск таймера для напоминания: {reminder_message} через {sleep_time} секунд")
