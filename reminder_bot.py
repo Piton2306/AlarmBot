@@ -61,7 +61,7 @@ months_ru = {
 
 # Словарь для перевода дней недели на русский язык
 days_ru = {
-    0: "Понедельник", 1: "Вторник", 2: "Среда", 3: "Четверг", 4: "Пятница", 5: "Суббота", 6: "Воскресенье"
+    0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"
 }
 
 
@@ -131,18 +131,24 @@ async def show_date_picker(message: Message, current_date: datetime.date):
         0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"
     }
     start_of_week = current_date - timedelta(days=current_date.weekday())
+
+    # Добавляем кнопку "назад" перед датами
+    builder.button(text="◀️", callback_data="scroll_back")
+    builder.adjust(1)
+
     for day in range(7):  # Показываем даты на текущую неделю
         date = start_of_week + timedelta(days=day)
+        if date < datetime.now().date():
+            continue  # Пропускаем прошедшие даты
         day_name = days_short[date.weekday()]  # Сокращённое название дня недели
         month_name = months_ru[date.month][:3]  # Сокращённое название месяца
         date_str = date.strftime('%Y-%m-%d')
         builder.button(text=f"{date.day} {month_name} {day_name}", callback_data=f"date_{date_str}")
-    builder.adjust(7)
+    builder.adjust(1)  # Отображаем даты в одном столбце
 
-    # Добавляем кнопки для прокрутки недель
-    builder.button(text="◀️", callback_data="scroll_back")
+    # Добавляем кнопку для прокрутки недель вперед
     builder.button(text="▶️", callback_data="scroll_forward")
-    builder.adjust(2)
+    builder.adjust(1)
 
     current_day_name = days_short[current_date.weekday()]
     current_month_name = months_ru[current_date.month][:3]
@@ -206,6 +212,57 @@ async def process_minute_callback(callback_query: types.CallbackQuery):
 
     await bot.edit_message_text("Введите сообщение для напоминания:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id)
+
+
+@dp.callback_query(lambda c: c.data == 'scroll_back')
+async def scroll_back(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    temp_data[chat_id]['current_date'] -= timedelta(weeks=1)
+    await update_date_picker(callback_query)
+
+
+@dp.callback_query(lambda c: c.data == 'scroll_forward')
+async def scroll_forward(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    temp_data[chat_id]['current_date'] += timedelta(weeks=1)
+    await update_date_picker(callback_query)
+
+
+async def update_date_picker(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    current_date = temp_data[chat_id]['current_date']
+
+    # Создаем календарь для выбора даты
+    builder = InlineKeyboardBuilder()
+    days_short = {
+        0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"
+    }
+    start_of_week = current_date - timedelta(days=current_date.weekday())
+
+    # Добавляем кнопку "назад" перед датами
+    builder.button(text="◀️", callback_data="scroll_back")
+    builder.adjust(1)
+
+    for day in range(7):  # Показываем даты на текущую неделю
+        date = start_of_week + timedelta(days=day)
+        if date < datetime.now().date():
+            continue  # Пропускаем прошедшие даты
+        day_name = days_short[date.weekday()]  # Сокращённое название дня недели
+        month_name = months_ru[date.month][:3]  # Сокращённое название месяца
+        date_str = date.strftime('%Y-%m-%d')
+        builder.button(text=f"{date.day} {month_name} {day_name}", callback_data=f"date_{date_str}")
+    builder.adjust(1)  # Отображаем даты в одном столбце
+
+    # Добавляем кнопку для прокрутки недель вперед
+    builder.button(text="▶️", callback_data="scroll_forward")
+    builder.adjust(1)
+
+    current_day_name = days_short[current_date.weekday()]
+    current_month_name = months_ru[current_date.month][:3]
+    current_date_str = f"{current_date.day} {current_month_name} {current_day_name}"
+
+    await bot.edit_message_text(f"Текущая дата: {current_date_str}\nВыберите дату:", chat_id=chat_id,
+                                message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
 
 
 @dp.message(Command(commands=['list']))
