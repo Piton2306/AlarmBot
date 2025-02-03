@@ -463,7 +463,9 @@ async def delete_reminder(message: Message):
     chat_id = message.chat.id
     logging.info(f"Пользователь {chat_id} запросил удаление напоминания.")
 
-    cursor.execute('SELECT id, reminder_time, reminder_message FROM reminders WHERE chat_id = ?', (chat_id,))
+    cursor.execute(
+        'SELECT id, reminder_time, reminder_message FROM reminders WHERE chat_id = ? AND is_sent = 0 ORDER BY reminder_time ASC',
+        (chat_id,))
     reminders_list = cursor.fetchall()
 
     if not reminders_list:
@@ -473,10 +475,9 @@ async def delete_reminder(message: Message):
 
     current_time = datetime.now()
 
-    # Сортируем список напоминаний по возрастанию времени срабатывания
-    reminders_list.sort(key=lambda x: datetime.fromisoformat(x[1]))
+    # Создаем инлайн-клавиатуру для выбора напоминаний
+    builder = InlineKeyboardBuilder()
 
-    response = "Список напоминаний:\n\n"
     for index, (reminder_id, reminder_time_str, reminder_message) in enumerate(reminders_list):
         reminder_time = datetime.fromisoformat(reminder_time_str)
         remaining_time = (reminder_time - current_time).total_seconds()
@@ -485,15 +486,28 @@ async def delete_reminder(message: Message):
             minutes = int((remaining_time % 3600) // 60)
             seconds = int(remaining_time % 60)
             remaining_time_str = f"{hours} часов {minutes} минут {seconds} секунд"
-            response += f"{index + 1}. {reminder_message} (Время: {reminder_time.strftime('%Y-%m-%d %H:%M')}, Осталось: {remaining_time_str})\n\n"
-        else:
-            response += f"{index + 1}. {reminder_message} (Время: {reminder_time.strftime('%Y-%m-%d %H:%M')}, Осталось: Напоминание уже прошло)\n\n"
+            builder.button(
+                text=f"{index + 1}. {reminder_message} (Время: {reminder_time.strftime('%Y-%m-%d %H:%M')}, Осталось: {remaining_time_str})",
+                callback_data=f"delete_{reminder_id}")
+            builder.adjust(1)
 
-    response += "Введите номер напоминания, которое хотите удалить:"
-    await message.reply(response)
+    await message.reply("Выберите напоминание для удаления:", reply_markup=builder.as_markup())
 
     # Сохраняем состояние для ожидания номера напоминания
     temp_data[chat_id] = {'action': 'delete'}
+
+
+@dp.callback_query(lambda c: c.data.startswith('delete_'))
+async def process_delete_callback(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    reminder_id = int(callback_query.data.split('_')[1])
+
+    # Удаляем напоминание из базы данных
+    cursor.execute('DELETE FROM reminders WHERE id = ?', (reminder_id,))
+    conn.commit()
+
+    await callback_query.message.edit_text(f"Напоминание №{reminder_id} удалено.")
+    await send_command_list(callback_query.message)
 
 
 @dp.message()
