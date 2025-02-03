@@ -55,8 +55,8 @@ temp_data = {}
 
 # Словарь для перевода месяцев на русский язык
 months_ru = {
-    1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель", 5: "Май", 6: "Июнь",
-    7: "Июль", 8: "Август", 9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь"
+    1: "Янв", 2: "Фев", 3: "Мар", 4: "Апр", 5: "Май", 6: "Июн",
+    7: "Июл", 8: "Авг", 9: "Сен", 10: "Окт", 11: "Ноя", 12: "Дек"
 }
 
 # Словарь для перевода дней недели на русский язык
@@ -141,7 +141,7 @@ async def show_date_picker(message: Message, current_date: datetime.date):
         if date < datetime.now().date():
             continue  # Пропускаем прошедшие даты
         day_name = days_short[date.weekday()]  # Сокращённое название дня недели
-        month_name = months_ru[date.month][:3]  # Сокращённое название месяца
+        month_name = months_ru[date.month]  # Сокращённое название месяца
         date_str = date.strftime('%Y-%m-%d')
         builder.button(text=f"{date.day} {month_name} {day_name}", callback_data=f"date_{date_str}")
     builder.adjust(1)  # Отображаем даты в одном столбце
@@ -151,7 +151,7 @@ async def show_date_picker(message: Message, current_date: datetime.date):
     builder.adjust(1)
 
     current_day_name = days_short[current_date.weekday()]
-    current_month_name = months_ru[current_date.month][:3]
+    current_month_name = months_ru[current_date.month]
     current_date_str = f"{current_date.day} {current_month_name} {current_day_name}"
 
     await message.reply(f"Текущая дата: {current_date_str}\nВыберите дату:", reply_markup=builder.as_markup())
@@ -164,10 +164,13 @@ async def process_date_callback(callback_query: types.CallbackQuery):
     temp_data[chat_id]['date'] = date_str
     logging.info(f"Пользователь {chat_id} выбрал дату: {date_str}")
 
-    await show_hour_picker(callback_query)
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+    date_display = f"{date.day} {months_ru[date.month]} {days_ru[date.weekday()]}"
+
+    await show_hour_picker(callback_query, date_display)
 
 
-async def show_hour_picker(callback_query: types.CallbackQuery):
+async def show_hour_picker(callback_query: types.CallbackQuery, date_display: str):
     chat_id = callback_query.message.chat.id
 
     # Создаем инлайн-клавиатуру для выбора часов
@@ -178,7 +181,7 @@ async def show_hour_picker(callback_query: types.CallbackQuery):
         builder.button(text=f"{hour:02}", callback_data=f"hour_{hour:02}")
     builder.adjust(2)  # Отображаем часы в двух столбцах
 
-    await bot.edit_message_text("Выберите час:", chat_id=chat_id,
+    await bot.edit_message_text(f"Выбрано: {date_display}\nВыберите час:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
 
 
@@ -189,10 +192,14 @@ async def process_hour_callback(callback_query: types.CallbackQuery):
     temp_data[chat_id]['hour'] = hour_str
     logging.info(f"Пользователь {chat_id} выбрал час: {hour_str}")
 
-    await show_minute_picker(callback_query)
+    date_str = temp_data[chat_id]['date']
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+    date_display = f"{date.day} {months_ru[date.month]} {days_ru[date.weekday()]}"
+
+    await show_minute_picker(callback_query, date_display, hour_str)
 
 
-async def show_minute_picker(callback_query: types.CallbackQuery):
+async def show_minute_picker(callback_query: types.CallbackQuery, date_display: str, hour_str: str):
     chat_id = callback_query.message.chat.id
 
     # Создаем инлайн-клавиатуру для выбора минут
@@ -203,7 +210,7 @@ async def show_minute_picker(callback_query: types.CallbackQuery):
         builder.button(text=f"{minute:02}", callback_data=f"minute_{minute:02}")
     builder.adjust(1)  # Отображаем минуты в одном столбце
 
-    await bot.edit_message_text("Выберите минуты:", chat_id=chat_id,
+    await bot.edit_message_text(f"Выбрано: {date_display} {hour_str}:00\nВыберите минуты:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
 
 
@@ -214,8 +221,25 @@ async def process_minute_callback(callback_query: types.CallbackQuery):
     temp_data[chat_id]['minute'] = minute_str
     logging.info(f"Пользователь {chat_id} выбрал минуты: {minute_str}")
 
-    await bot.edit_message_text("Введите сообщение для напоминания:", chat_id=chat_id,
-                                message_id=callback_query.message.message_id)
+    date_str = temp_data[chat_id]['date']
+    hour_str = temp_data[chat_id]['hour']
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+    date_display = f"{date.day} {months_ru[date.month]} {days_ru[date.weekday()]}"
+
+    await show_message_input(callback_query, date_display, hour_str, minute_str)
+
+
+async def show_message_input(callback_query: types.CallbackQuery, date_display: str, hour_str: str, minute_str: str):
+    chat_id = callback_query.message.chat.id
+
+    # Создаем инлайн-клавиатуру для возврата назад
+    builder = InlineKeyboardBuilder()
+    builder.button(text="◀️", callback_data="back_to_minute")
+    builder.adjust(1)
+
+    await bot.edit_message_text(f"Выбрано: {date_display} {hour_str}:{minute_str}\nВведите сообщение для напоминания:",
+                                chat_id=chat_id,
+                                message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
 
 
 @dp.callback_query(lambda c: c.data == 'back_to_date')
@@ -227,7 +251,19 @@ async def back_to_date(callback_query: types.CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == 'back_to_hour')
 async def back_to_hour(callback_query: types.CallbackQuery):
-    await show_hour_picker(callback_query)
+    date_str = temp_data[callback_query.message.chat.id]['date']
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+    date_display = f"{date.day} {months_ru[date.month]} {days_ru[date.weekday()]}"
+    await show_hour_picker(callback_query, date_display)
+
+
+@dp.callback_query(lambda c: c.data == 'back_to_minute')
+async def back_to_minute(callback_query: types.CallbackQuery):
+    date_str = temp_data[callback_query.message.chat.id]['date']
+    hour_str = temp_data[callback_query.message.chat.id]['hour']
+    date = datetime.strptime(date_str, '%Y-%m-%d')
+    date_display = f"{date.day} {months_ru[date.month]} {days_ru[date.weekday()]}"
+    await show_minute_picker(callback_query, date_display, hour_str)
 
 
 @dp.callback_query(lambda c: c.data == 'scroll_back')
@@ -264,7 +300,7 @@ async def update_date_picker(callback_query: types.CallbackQuery):
         if date < datetime.now().date():
             continue  # Пропускаем прошедшие даты
         day_name = days_short[date.weekday()]  # Сокращённое название дня недели
-        month_name = months_ru[date.month][:3]  # Сокращённое название месяца
+        month_name = months_ru[date.month]  # Сокращённое название месяца
         date_str = date.strftime('%Y-%m-%d')
         builder.button(text=f"{date.day} {month_name} {day_name}", callback_data=f"date_{date_str}")
     builder.adjust(1)  # Отображаем даты в одном столбце
@@ -274,7 +310,7 @@ async def update_date_picker(callback_query: types.CallbackQuery):
     builder.adjust(1)
 
     current_day_name = days_short[current_date.weekday()]
-    current_month_name = months_ru[current_date.month][:3]
+    current_month_name = months_ru[current_date.month]
     current_date_str = f"{current_date.day} {current_month_name} {current_day_name}"
 
     await bot.edit_message_text(f"Текущая дата: {current_date_str}\nВыберите дату:", chat_id=chat_id,
