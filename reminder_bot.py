@@ -232,14 +232,97 @@ async def process_minute_callback(callback_query: types.CallbackQuery):
 async def show_message_input(callback_query: types.CallbackQuery, date_display: str, hour_str: str, minute_str: str):
     chat_id = callback_query.message.chat.id
 
-    # Создаем инлайн-клавиатуру для возврата назад
+    # Получаем 5 популярных сообщений для пользователя из базы данных
+    cursor.execute('''
+    SELECT reminder_message
+    FROM reminders
+    WHERE chat_id = ?
+    GROUP BY reminder_message
+    ORDER BY COUNT(reminder_message) DESC
+    LIMIT 5
+    ''', (chat_id,))
+    popular_messages = cursor.fetchall()
+
+    # Создаем инлайн-клавиатуру для выбора популярных сообщений и возврата назад
     builder = InlineKeyboardBuilder()
     builder.button(text="◀️", callback_data="back_to_minute")
     builder.adjust(1)
 
-    await bot.edit_message_text(f"Выбрано: {date_display} {hour_str}:{minute_str}\nВведите сообщение для напоминания:",
-                                chat_id=chat_id,
-                                message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
+    for i, (message,) in enumerate(popular_messages):
+        builder.button(text=f"{i + 1}. {message}", callback_data=f"popular_message_{i}")
+    builder.adjust(1)
+
+    await bot.edit_message_text(
+        f"Выбрано: {date_display} {hour_str}:{minute_str}\n"
+        "Выберите одно из популярных сообщений или введите свое сообщение для напоминания:",
+        chat_id=chat_id,
+        message_id=callback_query.message.message_id,
+        reply_markup=builder.as_markup()
+    )
+
+
+@dp.callback_query(lambda c: c.data.startswith('popular_message_'))
+async def process_popular_message_callback(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    index = int(callback_query.data.split('_')[2])
+
+    # Получаем выбранное популярное сообщение из базы данных
+    cursor.execute('''
+    SELECT reminder_message
+    FROM reminders
+    WHERE chat_id = ?
+    GROUP BY reminder_message
+    ORDER BY COUNT(reminder_message) DESC
+    LIMIT 5
+    ''', (chat_id,))
+    popular_messages = cursor.fetchall()
+
+    if 0 <= index < len(popular_messages):
+        selected_message = popular_messages[index][0]
+        temp_data[chat_id]['message'] = selected_message
+
+        # Формируем полную дату и время
+        date_str = temp_data[chat_id]['date']
+        hour_str = temp_data[chat_id]['hour']
+        minute_str = temp_data[chat_id]['minute']
+        reminder_time_str = f"{date_str} {hour_str}:{minute_str}"
+        reminder_time = datetime.strptime(reminder_time_str, '%Y-%m-%d %H:%M')
+        current_time = datetime.now()
+
+        if reminder_time <= current_time:
+            await bot.edit_message_text(
+                "Дата и время напоминания должны быть в будущем.",
+                chat_id=chat_id,
+                message_id=callback_query.message.message_id
+            )
+            return
+
+        # Установите напоминание
+        cursor.execute('''
+        INSERT INTO reminders (chat_id, reminder_time, reminder_message)
+        VALUES (?, ?, ?)
+        ''', (chat_id, reminder_time.isoformat(), selected_message))
+        conn.commit()
+        logging.info(f"Напоминание добавлено: {reminder_time} - {selected_message}")
+        await bot.edit_message_text(
+            f"Напоминание установлено на {reminder_time.strftime('%Y-%m-%d %H:%M')}.",
+            chat_id=chat_id,
+            message_id=callback_query.message.message_id
+        )
+
+        # Запустите таймер для напоминания
+        sleep_time = (reminder_time - current_time).total_seconds()
+        asyncio.create_task(send_reminder(chat_id, selected_message, sleep_time))
+
+        # Очистите временные данные
+        del temp_data[chat_id]
+        await send_command_list(callback_query.message)
+    else:
+        await bot.edit_message_text(
+            "Неверный номер сообщения. Пожалуйста, выберите снова.",
+            chat_id=chat_id,
+            message_id=callback_query.message.message_id
+        )
 
 
 @dp.callback_query(lambda c: c.data == 'back_to_date')
