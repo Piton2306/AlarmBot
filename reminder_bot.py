@@ -121,6 +121,7 @@ async def set_reminder(message: Message):
     logging.info(f"Пользователь {chat_id} начал установку напоминания.")
     await show_date_picker(message, current_date)
 
+
 async def show_date_picker(message: Message, current_date: datetime.date):
     chat_id = message.chat.id
 
@@ -157,67 +158,54 @@ async def process_date_callback(callback_query: types.CallbackQuery):
     temp_data[chat_id]['date'] = date_str
     logging.info(f"Пользователь {chat_id} выбрал дату: {date_str}")
 
-    # Создаем инлайн-клавиатуру для выбора времени
+    await show_hour_picker(callback_query)
+
+
+async def show_hour_picker(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+
+    # Создаем инлайн-клавиатуру для выбора часов
     builder = InlineKeyboardBuilder()
     for hour in range(0, 24):
-        for minute in range(0, 60, 15):
-            builder.button(text=f"{hour:02}:{minute:02}", callback_data=f"time_{hour:02}:{minute:02}")
-    builder.adjust(4)
+        builder.button(text=f"{hour:02}", callback_data=f"hour_{hour:02}")
+    builder.adjust(6)
 
-    await bot.edit_message_text("Выберите время:", chat_id=chat_id,
+    await bot.edit_message_text("Выберите час:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
 
 
-@dp.callback_query(lambda c: c.data.startswith('time_'))
-async def process_time_callback(callback_query: types.CallbackQuery):
+@dp.callback_query(lambda c: c.data.startswith('hour_'))
+async def process_hour_callback(callback_query: types.CallbackQuery):
     chat_id = callback_query.message.chat.id
-    time_str = callback_query.data.split('_')[1]
-    temp_data[chat_id]['time'] = time_str
-    logging.info(f"Пользователь {chat_id} выбрал время: {time_str}")
+    hour_str = callback_query.data.split('_')[1]
+    temp_data[chat_id]['hour'] = hour_str
+    logging.info(f"Пользователь {chat_id} выбрал час: {hour_str}")
+
+    await show_minute_picker(callback_query)
+
+
+async def show_minute_picker(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+
+    # Создаем инлайн-клавиатуру для выбора минут
+    builder = InlineKeyboardBuilder()
+    for minute in range(0, 60, 15):
+        builder.button(text=f"{minute:02}", callback_data=f"minute_{minute:02}")
+    builder.adjust(4)
+
+    await bot.edit_message_text("Выберите минуты:", chat_id=chat_id,
+                                message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
+
+
+@dp.callback_query(lambda c: c.data.startswith('minute_'))
+async def process_minute_callback(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    minute_str = callback_query.data.split('_')[1]
+    temp_data[chat_id]['minute'] = minute_str
+    logging.info(f"Пользователь {chat_id} выбрал минуты: {minute_str}")
 
     await bot.edit_message_text("Введите сообщение для напоминания:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id)
-
-
-@dp.callback_query(lambda c: c.data == 'scroll_back')
-async def scroll_back(callback_query: types.CallbackQuery):
-    chat_id = callback_query.message.chat.id
-    temp_data[chat_id]['current_date'] -= timedelta(weeks=1)
-    await update_date_picker(callback_query)
-
-
-@dp.callback_query(lambda c: c.data == 'scroll_forward')
-async def scroll_forward(callback_query: types.CallbackQuery):
-    chat_id = callback_query.message.chat.id
-    temp_data[chat_id]['current_date'] += timedelta(weeks=1)
-    await update_date_picker(callback_query)
-
-
-async def update_date_picker(callback_query: types.CallbackQuery):
-    chat_id = callback_query.message.chat.id
-    current_date = temp_data[chat_id]['current_date']
-
-    # Создаем календарь для выбора даты
-    builder = InlineKeyboardBuilder()
-    days_short = {
-        0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"
-    }
-    start_of_week = current_date - timedelta(days=current_date.weekday())
-    for day in range(7):  # Показываем даты на текущую неделю
-        date = start_of_week + timedelta(days=day)
-        day_name = days_short[date.weekday()]  # Сокращённое название дня недели
-        month_name = months_ru[date.month][:3]  # Сокращённое название месяца
-        date_str = date.strftime('%Y-%m-%d')
-        builder.button(text=f"{date.day} {month_name} {day_name}", callback_data=f"date_{date_str}")
-    builder.adjust(7)
-
-    # Добавляем кнопки для прокрутки недель
-    builder.button(text="◀️", callback_data="scroll_back")
-    builder.button(text="▶️", callback_data="scroll_forward")
-    builder.adjust(2)
-
-    await bot.edit_message_reply_markup(chat_id=chat_id, message_id=callback_query.message.message_id,
-                                        reply_markup=builder.as_markup())
 
 
 @dp.message(Command(commands=['list']))
@@ -296,6 +284,16 @@ async def delete_reminder(message: Message):
 @dp.message()
 async def handle_message(message: Message):
     chat_id = message.chat.id
+
+    # Обработка команд
+    if message.text == '/list':
+        await list_reminders(message)
+        return
+    elif message.text == '/delete':
+        await delete_reminder(message)
+        return
+
+    # Обработка установки напоминания
     if 'action' in temp_data.get(chat_id, {}) and temp_data[chat_id]['action'] == 'delete':
         try:
             index = int(message.text) - 1
@@ -313,14 +311,15 @@ async def handle_message(message: Message):
         finally:
             del temp_data[chat_id]
         await send_command_list(message)
-    elif chat_id in temp_data and 'date' in temp_data[chat_id] and 'time' in temp_data[chat_id]:
+    elif 'date' in temp_data.get(chat_id, {}) and 'hour' in temp_data[chat_id] and 'minute' in temp_data[chat_id]:
         date_str = temp_data[chat_id]['date']
-        time_str = temp_data[chat_id]['time']
+        hour_str = temp_data[chat_id]['hour']
+        minute_str = temp_data[chat_id]['minute']
         reminder_message = message.text
         logging.info(f"Пользователь {chat_id} ввел сообщение для напоминания: {reminder_message}")
 
         # Формируем полную дату и время
-        reminder_time_str = f"{date_str} {time_str}"
+        reminder_time_str = f"{date_str} {hour_str}:{minute_str}"
         reminder_time = datetime.strptime(reminder_time_str, '%Y-%m-%d %H:%M')
         current_time = datetime.now()
 
@@ -344,6 +343,8 @@ async def handle_message(message: Message):
         # Очистите временные данные
         del temp_data[chat_id]
         await send_command_list(message)
+    else:
+        await message.reply("Пожалуйста, выберите дату, час и минуты для напоминания.")
 
 
 async def send_reminder(chat_id, reminder_message, sleep_time):
