@@ -64,6 +64,7 @@ days_ru = {
     0: "Понедельник", 1: "Вторник", 2: "Среда", 3: "Четверг", 4: "Пятница", 5: "Суббота", 6: "Воскресенье"
 }
 
+
 def add_test_reminders(chat_id):
     # Тестовые напоминания
     test_reminders = [
@@ -87,6 +88,7 @@ def add_test_reminders(chat_id):
         sleep_time = (reminder_time - datetime.now()).total_seconds()
         asyncio.create_task(send_reminder(chat_id, reminder_message, sleep_time))
 
+
 @dp.message(Command(commands=['start']))
 async def send_welcome(message: Message):
     logging.info(f"Пользователь {message.from_user.id} запустил бота.")
@@ -99,6 +101,7 @@ async def send_welcome(message: Message):
     )
     await message.reply(welcome_message)
 
+
 async def send_command_list(message: Message):
     command_list = (
         "Список доступных команд:\n"
@@ -109,27 +112,43 @@ async def send_command_list(message: Message):
     )
     await message.reply(command_list)
 
+
 @dp.message(Command(commands=['set']))
 async def set_reminder(message: Message):
     chat_id = message.chat.id
-    temp_data[chat_id] = {}
+    current_date = datetime.now().date()
+    temp_data[chat_id] = {'current_date': current_date}
     logging.info(f"Пользователь {chat_id} начал установку напоминания.")
+    await show_date_picker(message, current_date)
+
+async def show_date_picker(message: Message, current_date: datetime.date):
+    chat_id = message.chat.id
 
     # Создаем календарь для выбора даты
     builder = InlineKeyboardBuilder()
-    today = datetime.now()
     days_short = {
         0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"
     }
-    for day in range(15):  # Показываем даты на 14 дней вперед
-        date = today + timedelta(days=day)
+    start_of_week = current_date - timedelta(days=current_date.weekday())
+    for day in range(7):  # Показываем даты на текущую неделю
+        date = start_of_week + timedelta(days=day)
         day_name = days_short[date.weekday()]  # Сокращённое название дня недели
         month_name = months_ru[date.month][:3]  # Сокращённое название месяца
         date_str = date.strftime('%Y-%m-%d')
-        builder.button(text=f"{date.day} {month_name} {day_name} {date.year}", callback_data=f"date_{date_str}")
-    builder.adjust(1)
+        builder.button(text=f"{date.day} {month_name} {day_name}", callback_data=f"date_{date_str}")
+    builder.adjust(7)
 
-    await message.reply("Выберите дату:", reply_markup=builder.as_markup())
+    # Добавляем кнопки для прокрутки недель
+    builder.button(text="◀️", callback_data="scroll_back")
+    builder.button(text="▶️", callback_data="scroll_forward")
+    builder.adjust(2)
+
+    current_day_name = days_short[current_date.weekday()]
+    current_month_name = months_ru[current_date.month][:3]
+    current_date_str = f"{current_date.day} {current_month_name} {current_day_name}"
+
+    await message.reply(f"Текущая дата: {current_date_str}\nВыберите дату:", reply_markup=builder.as_markup())
+
 
 @dp.callback_query(lambda c: c.data.startswith('date_'))
 async def process_date_callback(callback_query: types.CallbackQuery):
@@ -148,6 +167,7 @@ async def process_date_callback(callback_query: types.CallbackQuery):
     await bot.edit_message_text("Выберите время:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
 
+
 @dp.callback_query(lambda c: c.data.startswith('time_'))
 async def process_time_callback(callback_query: types.CallbackQuery):
     chat_id = callback_query.message.chat.id
@@ -157,6 +177,48 @@ async def process_time_callback(callback_query: types.CallbackQuery):
 
     await bot.edit_message_text("Введите сообщение для напоминания:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id)
+
+
+@dp.callback_query(lambda c: c.data == 'scroll_back')
+async def scroll_back(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    temp_data[chat_id]['current_date'] -= timedelta(weeks=1)
+    await update_date_picker(callback_query)
+
+
+@dp.callback_query(lambda c: c.data == 'scroll_forward')
+async def scroll_forward(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    temp_data[chat_id]['current_date'] += timedelta(weeks=1)
+    await update_date_picker(callback_query)
+
+
+async def update_date_picker(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    current_date = temp_data[chat_id]['current_date']
+
+    # Создаем календарь для выбора даты
+    builder = InlineKeyboardBuilder()
+    days_short = {
+        0: "Пн", 1: "Вт", 2: "Ср", 3: "Чт", 4: "Пт", 5: "Сб", 6: "Вс"
+    }
+    start_of_week = current_date - timedelta(days=current_date.weekday())
+    for day in range(7):  # Показываем даты на текущую неделю
+        date = start_of_week + timedelta(days=day)
+        day_name = days_short[date.weekday()]  # Сокращённое название дня недели
+        month_name = months_ru[date.month][:3]  # Сокращённое название месяца
+        date_str = date.strftime('%Y-%m-%d')
+        builder.button(text=f"{date.day} {month_name} {day_name}", callback_data=f"date_{date_str}")
+    builder.adjust(7)
+
+    # Добавляем кнопки для прокрутки недель
+    builder.button(text="◀️", callback_data="scroll_back")
+    builder.button(text="▶️", callback_data="scroll_forward")
+    builder.adjust(2)
+
+    await bot.edit_message_reply_markup(chat_id=chat_id, message_id=callback_query.message.message_id,
+                                        reply_markup=builder.as_markup())
+
 
 @dp.message(Command(commands=['list']))
 async def list_reminders(message: Message):
@@ -191,6 +253,7 @@ async def list_reminders(message: Message):
             response += f"{index + 1}. Напоминание: {reminder_message}\nОсталось: Напоминание уже прошло\nСтатус: {status}\n\n"
     await message.reply(response)
     await send_command_list(message)
+
 
 @dp.message(Command(commands=['delete']))
 async def delete_reminder(message: Message):
@@ -228,6 +291,7 @@ async def delete_reminder(message: Message):
 
     # Сохраняем состояние для ожидания номера напоминания
     temp_data[chat_id] = {'action': 'delete'}
+
 
 @dp.message()
 async def handle_message(message: Message):
@@ -281,6 +345,7 @@ async def handle_message(message: Message):
         del temp_data[chat_id]
         await send_command_list(message)
 
+
 async def send_reminder(chat_id, reminder_message, sleep_time):
     logging.info(f"Запуск таймера для напоминания: {reminder_message} через {sleep_time} секунд")
     await asyncio.sleep(sleep_time)
@@ -296,9 +361,11 @@ async def send_reminder(chat_id, reminder_message, sleep_time):
     ''', (chat_id, reminder_message))
     conn.commit()
 
+
 async def main():
     logging.info("Запуск бота...")
     await dp.start_polling(bot)
+
 
 if __name__ == '__main__':
     asyncio.run(main())
