@@ -172,9 +172,11 @@ async def show_hour_picker(callback_query: types.CallbackQuery):
 
     # Создаем инлайн-клавиатуру для выбора часов
     builder = InlineKeyboardBuilder()
+    builder.button(text="◀️", callback_data="back_to_date")
+    builder.adjust(1)
     for hour in range(0, 24):
         builder.button(text=f"{hour:02}", callback_data=f"hour_{hour:02}")
-    builder.adjust(6)
+    builder.adjust(2)  # Отображаем часы в двух столбцах
 
     await bot.edit_message_text("Выберите час:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
@@ -195,9 +197,11 @@ async def show_minute_picker(callback_query: types.CallbackQuery):
 
     # Создаем инлайн-клавиатуру для выбора минут
     builder = InlineKeyboardBuilder()
-    for minute in range(0, 60, 15):
+    builder.button(text="◀️", callback_data="back_to_hour")
+    builder.adjust(1)
+    for minute in range(0, 60, 5):
         builder.button(text=f"{minute:02}", callback_data=f"minute_{minute:02}")
-    builder.adjust(4)
+    builder.adjust(1)  # Отображаем минуты в одном столбце
 
     await bot.edit_message_text("Выберите минуты:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id, reply_markup=builder.as_markup())
@@ -212,6 +216,18 @@ async def process_minute_callback(callback_query: types.CallbackQuery):
 
     await bot.edit_message_text("Введите сообщение для напоминания:", chat_id=chat_id,
                                 message_id=callback_query.message.message_id)
+
+
+@dp.callback_query(lambda c: c.data == 'back_to_date')
+async def back_to_date(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    current_date = temp_data[chat_id]['current_date']
+    await show_date_picker(callback_query.message, current_date)
+
+
+@dp.callback_query(lambda c: c.data == 'back_to_hour')
+async def back_to_hour(callback_query: types.CallbackQuery):
+    await show_hour_picker(callback_query)
 
 
 @dp.callback_query(lambda c: c.data == 'scroll_back')
