@@ -23,6 +23,9 @@ API_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 
+# Словарь для хранения идентификаторов таймеров
+timer_tasks = {}
+
 # Подключение к базе данных
 conn = sqlite3.connect('reminders.db')
 cursor = conn.cursor()
@@ -231,33 +234,100 @@ async def process_minute_callback(callback_query: types.CallbackQuery):
 async def show_message_input(callback_query: types.CallbackQuery, date_display: str, hour_str: str, minute_str: str):
     chat_id = callback_query.message.chat.id
 
-    # Получаем 5 популярных сообщений для пользователя из базы данных
+    # Получаем уникальные последние 5 сообщений для пользователя из базы данных
     cursor.execute('''
-    SELECT reminder_message
+    SELECT DISTINCT reminder_message
     FROM reminders
     WHERE chat_id = ?
-    GROUP BY reminder_message
-    ORDER BY COUNT(reminder_message) DESC
+    ORDER BY reminder_time DESC
     LIMIT 5
     ''', (chat_id,))
-    popular_messages = cursor.fetchall()
+    recent_messages = cursor.fetchall()
 
     # Создаем инлайн-клавиатуру для выбора популярных сообщений и возврата назад
     builder = InlineKeyboardBuilder()
     builder.button(text="◀️", callback_data="back_to_minute")
     builder.adjust(1)
 
-    for i, (message,) in enumerate(popular_messages):
-        builder.button(text=f"{i + 1}. {message}", callback_data=f"popular_message_{i}")
+    for i, (message,) in enumerate(recent_messages):
+        builder.button(text=f"{i + 1}. {message}", callback_data=f"recent_message_{i}")
     builder.adjust(1)
 
     await bot.edit_message_text(
         f"Выбрано: {date_display} {hour_str}:{minute_str}\n"
-        "Выберите одно из популярных сообщений или введите свое сообщение для напоминания:",
+        "Выберите одно из последних сообщений или введите свое сообщение для напоминания:",
         chat_id=chat_id,
         message_id=callback_query.message.message_id,
         reply_markup=builder.as_markup()
     )
+
+
+@dp.callback_query(lambda c: c.data.startswith('recent_message_'))
+async def process_recent_message_callback(callback_query: types.CallbackQuery):
+    chat_id = callback_query.message.chat.id
+    index = int(callback_query.data.split('_')[2])
+
+    # Получаем выбранное популярное сообщение из базы данных
+    cursor.execute('''
+    SELECT DISTINCT reminder_message
+    FROM reminders
+    WHERE chat_id = ?
+    ORDER BY reminder_time DESC
+    LIMIT 5
+    ''', (chat_id,))
+    recent_messages = cursor.fetchall()
+
+    if 0 <= index < len(recent_messages):
+        selected_message = recent_messages[index][0]
+        temp_data[chat_id]['message'] = selected_message
+
+        # Формируем полную дату и время
+        date_str = temp_data[chat_id]['date']
+        hour_str = temp_data[chat_id]['hour']
+        minute_str = temp_data[chat_id]['minute']
+        reminder_time_str = f"{date_str} {hour_str}:{minute_str}"
+        reminder_time = datetime.strptime(reminder_time_str, '%Y-%m-%d %H:%M')
+        current_time = datetime.now()
+
+        if reminder_time <= current_time:
+            await bot.edit_message_text(
+                "Дата и время напоминания должны быть в будущем.",
+                chat_id=chat_id,
+                message_id=callback_query.message.message_id
+            )
+            return
+
+        # Установите напоминание
+        cursor.execute('''
+        INSERT INTO reminders (chat_id, reminder_time, reminder_message)
+        VALUES (?, ?, ?)
+        ''', (chat_id, reminder_time.isoformat(), selected_message))
+        conn.commit()
+
+        # Получаем идентификатор только что добавленного напоминания
+        reminder_id = cursor.lastrowid
+
+        logging.info(f"Напоминание добавлено: {reminder_time} - {selected_message}")
+        await bot.edit_message_text(
+            f"Напоминание установлено на {reminder_time.strftime('%Y-%m-%d %H:%M')}.",
+            chat_id=chat_id,
+            message_id=callback_query.message.message_id
+        )
+
+        # Запустите таймер для напоминания
+        sleep_time = (reminder_time - current_time).total_seconds()
+        asyncio.create_task(send_reminder(chat_id, selected_message, sleep_time, reminder_id))
+
+        # Очистите временные данные
+        del temp_data[chat_id]
+        await send_command_list(callback_query.message)
+    else:
+        await bot.edit_message_text(
+            "Неверный номер сообщения. Пожалуйста, выберите снова.",
+            chat_id=chat_id,
+            message_id=callback_query.message.message_id
+        )
+
 
 
 @dp.callback_query(lambda c: c.data.startswith('popular_message_'))
@@ -442,8 +512,12 @@ async def list_reminders(message: Message):
     await send_command_list(message)
 
 
-async def send_reminder(chat_id, reminder_message, sleep_time):
+async def send_reminder(chat_id, reminder_message, sleep_time, reminder_id):
     logging.info(f"Запуск таймера для напоминания: {reminder_message} через {sleep_time} секунд")
+    task = asyncio.create_task(send_reminder_task(chat_id, reminder_message, sleep_time, reminder_id))
+    timer_tasks[reminder_id] = task
+
+async def send_reminder_task(chat_id, reminder_message, sleep_time, reminder_id):
     await asyncio.sleep(sleep_time)
     logging.info(f"Отправка напоминания: {reminder_message} для пользователя {chat_id}")
     await bot.send_message(chat_id=chat_id, text=f"Напоминание: {reminder_message}")
@@ -453,9 +527,14 @@ async def send_reminder(chat_id, reminder_message, sleep_time):
     cursor.execute('''
     UPDATE reminders
     SET is_sent = 1
-    WHERE chat_id = ? AND reminder_message = ?
-    ''', (chat_id, reminder_message))
+    WHERE id = ?
+    ''', (reminder_id,))
     conn.commit()
+
+    # Удалить таймер из словаря
+    if reminder_id in timer_tasks:
+        del timer_tasks[reminder_id]
+
 
 
 @dp.message(Command(commands=['delete']))
@@ -501,6 +580,11 @@ async def delete_reminder(message: Message):
 async def process_delete_callback(callback_query: types.CallbackQuery):
     chat_id = callback_query.message.chat.id
     reminder_id = int(callback_query.data.split('_')[1])
+
+    # Отменяем таймер, если он существует
+    if reminder_id in timer_tasks:
+        timer_tasks[reminder_id].cancel()
+        del timer_tasks[reminder_id]
 
     # Удаляем напоминание из базы данных
     cursor.execute('DELETE FROM reminders WHERE id = ?', (reminder_id,))
@@ -574,22 +658,6 @@ async def handle_message(message: Message):
         await send_command_list(message)
     else:
         await message.reply("Пожалуйста, выберите дату, час и минуты для напоминания.")
-
-
-async def send_reminder(chat_id, reminder_message, sleep_time):
-    logging.info(f"Запуск таймера для напоминания: {reminder_message} через {sleep_time} секунд")
-    await asyncio.sleep(sleep_time)
-    logging.info(f"Отправка напоминания: {reminder_message} для пользователя {chat_id}")
-    await bot.send_message(chat_id=chat_id, text=f"Напоминание: {reminder_message}")
-    logging.info(f"Напоминание отправлено: {reminder_message} для пользователя {chat_id}")
-
-    # Отметить напоминание как отправленное
-    cursor.execute('''
-    UPDATE reminders
-    SET is_sent = 1
-    WHERE chat_id = ? AND reminder_message = ?
-    ''', (chat_id, reminder_message))
-    conn.commit()
 
 
 async def main():
