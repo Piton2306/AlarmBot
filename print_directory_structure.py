@@ -1,7 +1,7 @@
 import os
 
 
-def print_directory_structure(start_path, output_file, exclude_dirs=None, exclude_files=None, include_files=None):
+def print_directory_structure(start_path, output_file, exclude_dirs=None, exclude_files=None, include_files=None, separate_structure=False):
     """
     Рекурсивно выводит структуру папки и вложенных файлов, исключая указанные папки и файлы,
     и записывает содержимое файлов в отдельный файл.
@@ -11,6 +11,7 @@ def print_directory_structure(start_path, output_file, exclude_dirs=None, exclud
     :param exclude_dirs: Список папок, которые нужно исключить.
     :param exclude_files: Список файлов, которые нужно исключить.
     :param include_files: Список файлов, которые нужно включить, даже если они находятся в исключенных папках.
+    :param separate_structure: Флаг, указывающий, нужно ли выводить структуру файлов отдельно.
     """
     if exclude_dirs is None:
         exclude_dirs = []
@@ -19,31 +20,62 @@ def print_directory_structure(start_path, output_file, exclude_dirs=None, exclud
     if include_files is None:
         include_files = []
 
+    # Если нужно выводить структуру отдельно, создаем отдельный файл для структуры
+    if separate_structure:
+        structure_file = os.path.splitext(output_file)[0] + "_structure.txt"
+        with open(structure_file, 'w', encoding='utf-8') as f_structure:
+            # Выводим имя проекта
+            project_name = os.path.basename(os.path.abspath(start_path))
+            f_structure.write(f"Проект: {project_name}\n\n")
+
+            # Выводим структуру папки
+            f_structure.write("Структура папки:\n")
+            for root, dirs, files in os.walk(start_path):
+                # Исключаем папки
+                dirs[:] = [d for d in dirs if d not in exclude_dirs]
+
+                level = root.replace(start_path, '').count(os.sep)
+                indent = ' ' * 4 * (level)
+                if level == 0:
+                    f_structure.write(f"{os.path.basename(root)}/\n")
+                else:
+                    relative_path = os.path.relpath(root, start_path)
+                    f_structure.write(f"{indent}{relative_path}/\n")
+                sub_indent = ' ' * 4 * (level + 1)
+
+                # Исключаем файлы
+                for file in files:
+                    if not any(file.endswith(ext) for ext in exclude_files) or any(
+                            file.endswith(ext) for ext in include_files):
+                        f_structure.write(f"{sub_indent}{file}\n")
+
+    # Записываем содержимое файлов в основной файл
     with open(output_file, 'w', encoding='utf-8') as f_out:
         # Выводим имя проекта
         project_name = os.path.basename(os.path.abspath(start_path))
         f_out.write(f"Проект: {project_name}\n\n")
 
-        # Выводим структуру папки
-        f_out.write("Структура папки:\n")
-        for root, dirs, files in os.walk(start_path):
-            # Исключаем папки
-            dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        # Если структура не выводится отдельно, добавляем её в основной файл
+        if not separate_structure:
+            f_out.write("Структура папки:\n")
+            for root, dirs, files in os.walk(start_path):
+                # Исключаем папки
+                dirs[:] = [d for d in dirs if d not in exclude_dirs]
 
-            level = root.replace(start_path, '').count(os.sep)
-            indent = ' ' * 4 * (level)
-            if level == 0:
-                f_out.write(f"{os.path.basename(root)}/\n")
-            else:
-                relative_path = os.path.relpath(root, start_path)
-                f_out.write(f"{indent}{relative_path}/\n")
-            sub_indent = ' ' * 4 * (level + 1)
+                level = root.replace(start_path, '').count(os.sep)
+                indent = ' ' * 4 * (level)
+                if level == 0:
+                    f_out.write(f"{os.path.basename(root)}/\n")
+                else:
+                    relative_path = os.path.relpath(root, start_path)
+                    f_out.write(f"{indent}{relative_path}/\n")
+                sub_indent = ' ' * 4 * (level + 1)
 
-            # Исключаем файлы
-            for file in files:
-                if not any(file.endswith(ext) for ext in exclude_files) or any(
-                        file.endswith(ext) for ext in include_files):
-                    f_out.write(f"{sub_indent}{file}\n")
+                # Исключаем файлы
+                for file in files:
+                    if not any(file.endswith(ext) for ext in exclude_files) or any(
+                            file.endswith(ext) for ext in include_files):
+                        f_out.write(f"{sub_indent}{file}\n")
 
         f_out.write("\nСодержимое файлов:\n")
 
@@ -80,5 +112,6 @@ if __name__ == "__main__":
                      "requirements.txt", ".log", "print_directory_structure.py","reminders.db",
                      "init.py"]  # Файлы, которые нужно исключить
     include_files = []  # Файлы, которые нужно включить, даже если они находятся в исключенных папках
+    separate_structure = True  # Флаг для вывода структуры файлов отдельно
     print_directory_structure(start_path, output_file, exclude_dirs=exclude_dirs, exclude_files=exclude_files,
-                              include_files=include_files)
+                              include_files=include_files, separate_structure=separate_structure)

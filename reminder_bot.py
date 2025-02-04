@@ -68,6 +68,9 @@ conn.commit()
 # Словарь для хранения временных данных выбора
 temp_data = {}
 
+# Словарь для хранения активных таймеров
+active_timers = {}
+
 # Словарь для перевода месяцев на русский язык
 months_ru = {
     1: "Янв", 2: "Фев", 3: "Мар", 4: "Апр", 5: "Май", 6: "Июн",
@@ -102,7 +105,7 @@ def add_test_reminders(chat_id):
     # Запуск таймеров для тестовых напоминаний
     for reminder_time, reminder_message in test_reminders:
         sleep_time = (reminder_time - datetime.now()).total_seconds()
-        asyncio.create_task(send_reminder(chat_id, reminder_message, sleep_time))
+        asyncio.create_task(send_reminder_task(chat_id, reminder_message, sleep_time))
 
 
 @dp.message(Command(commands=['start']))
@@ -349,7 +352,7 @@ async def process_recent_message_callback(callback_query: types.CallbackQuery):
         )
 
         sleep_time = (reminder_time - current_time).total_seconds()
-        asyncio.create_task(send_reminder(chat_id, selected_message, sleep_time, reminder_id))
+        asyncio.create_task(send_reminder_task(chat_id, selected_message, sleep_time, reminder_id))
 
         del temp_data[chat_id]
         await send_command_list(callback_query.message)
@@ -496,29 +499,60 @@ async def list_reminders(message: Message):
     await send_command_list(message)
 
 
-async def send_reminder(chat_id, reminder_message, sleep_time, reminder_id):
-    """
-    Запускает таймер для отправки напоминания.
-    """
-    logging.info(f"Запуск таймера для напоминания: {reminder_message} через {sleep_time} секунд")
-    asyncio.create_task(send_reminder_task(chat_id, reminder_message, sleep_time, reminder_id))
-
-
 async def send_reminder_task(chat_id, reminder_message, sleep_time, reminder_id):
     """
     Отправляет напоминание пользователю.
     """
     await asyncio.sleep(sleep_time)
-    logging.info(f"Отправка напоминания: {reminder_message} для пользователя {chat_id}")
-    await bot.send_message(chat_id=chat_id, text=f"Напоминание: {reminder_message}")
-    logging.info(f"Напоминание отправлено: {reminder_message} для пользователя {chat_id}")
 
+    # Проверяем, не было ли напоминание уже отправлено
     cursor.execute('''
-    UPDATE reminders
-    SET is_sent = 1
+    SELECT is_sent
+    FROM reminders
     WHERE id = ?
     ''', (reminder_id,))
-    conn.commit()
+    is_sent = cursor.fetchone()[0]
+
+    if is_sent == 0:
+        logging.info(f"Отправка напоминания: {reminder_message} для пользователя {chat_id}")
+        await bot.send_message(chat_id=chat_id, text=f"Напоминание: {reminder_message}")
+        logging.info(f"Напоминание отправлено: {reminder_message} для пользователя {chat_id}")
+
+        cursor.execute('''
+        UPDATE reminders
+        SET is_sent = 1
+        WHERE id = ?
+        ''', (reminder_id,))
+        conn.commit()
+    else:
+        logging.info(f"Напоминание уже отправлено: {reminder_message} для пользователя {chat_id}")
+
+
+async def check_and_restart_timers():
+    """
+    Проверяет и перезапускает таймеры для напоминаний, которые еще не были отправлены.
+    """
+    logging.info("Запуск проверки и перезапуска таймеров...")
+    while True:
+        cursor.execute('''
+        SELECT id, chat_id, reminder_time, reminder_message, is_sent
+        FROM reminders
+        WHERE is_sent = 0
+        ''')
+        reminders = cursor.fetchall()
+
+        current_time = datetime.now()
+
+        for reminder_id, chat_id, reminder_time_str, reminder_message, is_sent in reminders:
+            reminder_time = datetime.fromisoformat(reminder_time_str)
+            remaining_time = (reminder_time - current_time).total_seconds()
+
+            if remaining_time > 0 and reminder_id not in active_timers:
+                logging.info(f"Запуск таймера для напоминания {reminder_id} для пользователя {chat_id}")
+                active_timers[reminder_id] = asyncio.create_task(
+                    send_reminder_task(chat_id, reminder_message, remaining_time, reminder_id))
+
+        await asyncio.sleep(60)  # Проверяем каждую минуту
 
 
 @dp.message(Command(commands=['delete']))
@@ -631,36 +665,12 @@ async def handle_message(message: Message):
         await message.reply(f"Напоминание установлено на {reminder_time.strftime('%Y-%m-%d %H:%M')}.")
 
         sleep_time = (reminder_time - current_time).total_seconds()
-        asyncio.create_task(send_reminder(chat_id, reminder_message, sleep_time))
+        asyncio.create_task(send_reminder_task(chat_id, reminder_message, sleep_time))
 
         del temp_data[chat_id]
         await send_command_list(message)
     else:
         await message.reply("Пожалуйста, выберите дату, час и минуты для напоминания.")
-
-
-async def check_and_restart_timers():
-    """
-    Проверяет и перезапускает таймеры для напоминаний, которые еще не были отправлены.
-    """
-    while True:
-        cursor.execute('''
-        SELECT id, chat_id, reminder_time, reminder_message, is_sent
-        FROM reminders
-        WHERE is_sent = 0
-        ''')
-        reminders = cursor.fetchall()
-
-        current_time = datetime.now()
-
-        for reminder_id, chat_id, reminder_time_str, reminder_message, is_sent in reminders:
-            reminder_time = datetime.fromisoformat(reminder_time_str)
-            remaining_time = (reminder_time - current_time).total_seconds()
-
-            if remaining_time > 0:
-                asyncio.create_task(send_reminder(chat_id, reminder_message, remaining_time, reminder_id))
-
-        await asyncio.sleep(60)  # Проверяем каждую минуту
 
 
 async def main():
