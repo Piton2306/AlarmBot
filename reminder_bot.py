@@ -599,8 +599,31 @@ async def handle_message(message: Message):
         await message.reply("Пожалуйста, выберите дату, час и минуты для напоминания.")
 
 
+async def check_and_restart_timers():
+    while True:
+        cursor.execute('''
+        SELECT id, chat_id, reminder_time, reminder_message, is_sent
+        FROM reminders
+        WHERE is_sent = 0
+        ''')
+        reminders = cursor.fetchall()
+
+        current_time = datetime.now()
+
+        for reminder_id, chat_id, reminder_time_str, reminder_message, is_sent in reminders:
+            reminder_time = datetime.fromisoformat(reminder_time_str)
+            remaining_time = (reminder_time - current_time).total_seconds()
+
+            if remaining_time > 0:
+                # Перезапускаем таймер, если он еще не отправлен
+                asyncio.create_task(send_reminder(chat_id, reminder_message, remaining_time, reminder_id))
+
+        await asyncio.sleep(60)  # Проверяем каждую минуту
+
+
 async def main():
     logging.info("Запуск бота...")
+    asyncio.create_task(check_and_restart_timers())  # Запускаем проверку и перезапуск таймеров
     await dp.start_polling(bot)
 
 
