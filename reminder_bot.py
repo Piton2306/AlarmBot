@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import os
-import sqlite3
+import sqlite3 as sqlite3
 from datetime import datetime, timedelta
 from logging.handlers import TimedRotatingFileHandler
 
@@ -28,7 +28,8 @@ logging.basicConfig(
             os.path.join(log_directory, 'bot.log'),
             when='midnight',
             interval=1,
-            backupCount=7
+            backupCount=7,
+            encoding='Windows-1251'  # Укажите кодировку здесь
         )
     ]
 )
@@ -57,15 +58,11 @@ CREATE TABLE IF NOT EXISTS reminders (
 conn.commit()
 
 # Добавление колонки is_sent, если она не существует
-cursor.execute('''
-PRAGMA table_info(reminders);
-''')
+cursor.execute('PRAGMA table_info(reminders);')
 columns = cursor.fetchall()
 column_names = [column[1] for column in columns]
 if 'is_sent' not in column_names:
-    cursor.execute('''
-    ALTER TABLE reminders ADD COLUMN is_sent INTEGER DEFAULT 0;
-    ''')
+    cursor.execute('ALTER TABLE reminders ADD COLUMN is_sent INTEGER DEFAULT 0;')
 conn.commit()
 
 # Словарь для хранения временных данных выбора
@@ -175,7 +172,7 @@ async def show_date_picker(message: Message, current_date: datetime.date):
         builder.button(text=f"{date.day} {month_name} {day_name}", callback_data=f"date_{date_str}")
     builder.adjust(1)  # Отображаем даты в одном столбце
 
-    # Добавляем кнопку для прокрутки недель вперед
+    # Добавляем кнопку для прокрутки недель вперёд
     builder.button(text="▶️", callback_data="scroll_forward")
     builder.adjust(1)
 
@@ -410,7 +407,7 @@ async def scroll_back(callback_query: types.CallbackQuery):
 @dp.callback_query(lambda c: c.data == 'scroll_forward')
 async def scroll_forward(callback_query: types.CallbackQuery):
     """
-    Прокручивает календарь на неделю вперед.
+    Прокручивает календарь на неделю вперёд.
     """
     chat_id = callback_query.message.chat.id
     temp_data[chat_id]['current_date'] += timedelta(weeks=1)
