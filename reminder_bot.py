@@ -3,6 +3,7 @@ import logging
 import os
 import sqlite3
 from datetime import datetime, timedelta
+from logging.handlers import TimedRotatingFileHandler
 
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -13,8 +14,24 @@ from dotenv import load_dotenv
 # Загрузите переменные окружения из файла .env
 load_dotenv()
 
-# Включите логирование
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Настройка логирования
+log_directory = 'logs'
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        TimedRotatingFileHandler(
+            os.path.join(log_directory, 'bot.log'),
+            when='midnight',
+            interval=1,
+            backupCount=7
+        )
+    ]
+)
 
 # Ваш токен API из переменной окружения
 API_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
