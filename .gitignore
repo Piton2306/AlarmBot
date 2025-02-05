@@ -1,3 +1,6 @@
 .idea
 .venv
 /reminders.db
+/directory_structure.txt
+/directory_structure_structure.txt
+/db_docker/

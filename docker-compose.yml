@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  app-alarmbot:
+    image: python:3.12.3
+    container_name: AlarmBot
+    restart: always
+    volumes:
+      - ./reminder_bot.py:/usr/src/app/reminder_bot.py
+      - ./.env:/usr/src/app/.env
+      - ./requirements.txt:/usr/src/app/requirements.txt
+      # Добавьте другие файлы или директории, если необходимо
+    working_dir: /usr/src/app
+    environment:
+      - TZ=Europe/Moscow
+    command: >
+      bash -c "python -m venv venv &&
+               source venv/bin/activate &&
+               pip install --no-cache-dir -r requirements.txt &&
+               apt-get update && apt-get install -y sqlite3 &&
+               python -m reminder_bot"
