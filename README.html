@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlarmBot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 20px;
+            background-color: #000000;
+            color: #c0c0c0;
+        }
+        h1, h2, h3 {
+            color: #ffffff;
+        }
+        .code-container {
+            display: flex;
+            align-items: center;
+            background-color: #2d2d2d;
+            padding: 5px 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .code-container code {
+            flex: 1;
+            font-family: Consolas, monospace;
+            color: #d0d0d0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .code-container button {
+            margin-left: 10px;
+            background-color: #4444;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .code-container button:hover {
+            background-color: #0056b3;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #444;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #3a3a3a;
+            color: #ffffff;
+        }
+        pre {
+            background-color: #2d2d2d;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        .section-title {
+            color: #ffffff;
+            margin-top: 20px;
+        }
+        .nav-list {
+            background-color: #3a3a3a;
+            padding: 10px;
+            border-radius: 5px;
+            list-style-type: none; /* Убираем маркеры списка */
+        }
+        .nav-list li {
+            margin: 5px 0;
+        }
+        .nav-list a {
+            color: #007BFF;
+            text-decoration: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .nav-list a:hover {
+            background-color: rgba(0, 123, 255, 0.2); /* Прозрачный фон при наведении */
+            color: #ffffff;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+<h1>AlarmBot</h1>
+<p>AlarmBot — это бот для Telegram, который помогает пользователям устанавливать напоминания и управлять ими. Бот поддерживает создание, просмотр и удаление напоминаний, а также отправку уведомлений в заданное время.</p>
+
+<h2 class="section-title">Содержание</h2>
+<ul class="nav-list">
+    <li><a href="#установка">Установка</a></li>
+    <li><a href="#использование">Использование</a></li>
+    <li><a href="#команды">Команды</a></li>
+    <li><a href="#структура-базы-данных">Структура базы данных</a></li>
+    <li><a href="#работа-с-docker">Работа с Docker</a></li>
+</ul>
+
+<h2 id="установка" class="section-title">Установка</h2>
+<ol>
+    <li>
+        <strong>Клонируйте репозиторий:</strong>
+        <div class="code-container">
+            <code>git clone &lt;URL вашего репозитория&gt; && cd AlarmBot</code>
+            <button onclick="copyToClipboard('git clone &lt;URL вашего репозитория&gt; && cd AlarmBot')">Копировать</button>
+        </div>
+    </li>
+    <li>
+        <strong>Создайте файл <code>.env</code>:</strong>
+        <p>Создайте файл <code>.env</code> в корневой директории проекта и добавьте туда ваш токен Telegram API:</p>
+        <div class="code-container">
+            <code>TELEGRAM_BOT_TOKEN=ваш_токен_здесь</code>
+            <button onclick="copyToClipboard('TELEGRAM_BOT_TOKEN=ваш_токен_здесь')">Копировать</button>
+        </div>
+    </li>
+    <li>
+        <strong>Запустите Docker-контейнер:</strong>
+        <p>Убедитесь, что у вас установлен Docker и Docker Compose, затем выполните:</p>
+        <div class="code-container">
+            <code>docker-compose up --build</code>
+            <button onclick="copyToClipboard('docker-compose up --build')">Копировать</button>
+        </div>
+    </li>
+</ol>
+
+<h2 id="использование" class="section-title">Использование</h2>
+<p>После запуска бота вы можете взаимодействовать с ним через Telegram. Добавьте бота в свои контакты и используйте следующие команды:</p>
+
+<h2 id="команды" class="section-title">Команды</h2>
+<ul>
+    <li>
+        <div class="code-container">
+            <code>/start</code>
+            <button onclick="copyToClipboard('/start')">Копировать</button>
+        </div>
+        : Приветственное сообщение с описанием доступных команд.
+    </li>
+    <li>
+        <div class="code-container">
+            <code>/set</code>
+            <button onclick="copyToClipboard('/set')">Копировать</button>
+        </div>
+        : Установить новое напоминание.
+    </li>
+    <li>
+        <div class="code-container">
+            <code>/list</code>
+            <button onclick="copyToClipboard('/list')">Копировать</button>
+        </div>
+        : Показать список напоминаний и оставшееся до них время.
+    </li>
+    <li>
+        <div class="code-container">
+            <code>/delete</code>
+            <button onclick="copyToClipboard('/delete')">Копировать</button>
+        </div>
+        : Удалить напоминание.
+    </li>
+</ul>
+
+<h2 id="структура-базы-данных" class="section-title">Структура базы данных</h2>
+<p>Бот использует базу данных SQLite для хранения информации о напоминаниях. Основная таблица — <code>reminders</code>, которая имеет следующую структуру:</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Колонка</th>
+            <th>Тип данных</th>
+            <th>Описание</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>id</code></td>
+            <td><code>INTEGER</code></td>
+            <td>Уникальный идентификатор напоминания (автоинкремент).</td>
+        </tr>
+        <tr>
+            <td><code>chat_id</code></td>
+            <td><code>INTEGER</code></td>
+            <td>Идентификатор чата, в котором было установлено напоминание.</td>
+        </tr>
+        <tr>
+            <td><code>reminder_time</code></td>
+            <td><code>TEXT</code></td>
+            <td>Время напоминания в формате ISO 8601 (например, <code>2023-10-01T12:00:00</code>).</td>
+        </tr>
+        <tr>
+            <td><code>reminder_message</code></td>
+            <td><code>TEXT</code></td>
+            <td>Сообщение напоминания.</td>
+        </tr>
+        <tr>
+            <td><code>is_sent</code></td>
+            <td><code>INTEGER</code></td>
+            <td>Статус отправки напоминания (0 - не отправлено, 1 - отправлено).</td>
+        </tr>
+    </tbody>
+</table>
+
+<h3>Пример SQL-запроса для создания таблицы</h3>
+<pre><code>CREATE TABLE IF NOT EXISTS reminders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    chat_id INTEGER,
+    reminder_time TEXT,
+    reminder_message TEXT,
+    is_sent INTEGER DEFAULT 0
+);</code></pre>
+
+<h3>Пример SQL-запроса для вставки данных</h3>
+<pre><code>INSERT INTO reminders (chat_id, reminder_time, reminder_message, is_sent)
+VALUES (123456, '2023-10-01T12:00:00', 'Напоминание о встрече', 0);</code></pre>
+
+<h3>Пример SQL-запроса для выборки данных</h3>
+<pre><code>SELECT * FROM reminders WHERE is_sent = 0;</code></pre>
+
+<h3>Пример SQL-запроса для обновления данных</h3>
+<pre><code>UPDATE reminders
+SET is_sent = 1
+WHERE id = 1;</code></pre>
+
+<h3>Пример SQL-запроса для удаления данных</h3>
+<pre><code>DELETE FROM reminders
+WHERE id = 1;</code></pre>
+
+<h2 id="работа-с-docker" class="section-title">Работа с Docker</h2>
+
+<h3>Подключение к контейнеру</h3>
+<p>Для выполнения команд внутри контейнера используйте:</p>
+<div class="code-container">
+    <code>docker exec -it AlarmBot /bin/bash</code>
+    <button onclick="copyToClipboard('docker exec -it AlarmBot /bin/bash')">Копировать</button>
+</div>
+
+<h3>Работа с базой данных</h3>
+<p>Для работы с базой данных SQLite внутри контейнера:</p>
+<div class="code-container">
+    <code>sqlite3 reminders.db</code>
+    <button onclick="copyToClipboard('sqlite3 reminders.db')">Копировать</button>
+</div>
+
+<h3>Копирование файла базы данных</h3>
+<p>Для резервного копирования базы данных или её восстановления используйте команды:</p>
+
+<h4>Копирование базы данных из контейнера на хост</h4>
+<div class="code-container">
+    <code>docker cp AlarmBot:/usr/src/app/reminders.db D:\Project\AlarmBot\db_docker\reminders.db</code>
+    <button onclick="copyToClipboard('docker cp AlarmBot:/usr/src/app/reminders.db D:\\Project\\AlarmBot\\db_docker\\reminders.db')">Копировать</button>
+</div>
+
+<h4>Копирование базы данных с хоста в контейнер</h4>
+<div class="code-container">
+    <code>docker cp D:\Project\AlarmBot\db_docker\reminders.db AlarmBot:/usr/src/app/reminders.db</code>
+    <button onclick="copyToClipboard('docker cp D:\\Project\\AlarmBot\\db_docker\\reminders.db AlarmBot:/usr/src/app/reminders.db')">Копировать</button>
+</div>
+
+<script>
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(function() {
+            console.log('Text copied to clipboard:', text);
+        }).catch(function(err) {
+            console.error('Error in copying text: ', err);
+        });
+    }
+</script>
+
+</body>
+</html>
